@@ -1,2 +1,3 @@
 # tripay-amember-plugin
-Plugin Tripay untuk aMember
+
+Plugin integrasi Tripay untuk aMember
