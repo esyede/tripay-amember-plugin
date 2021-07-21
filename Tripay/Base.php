@@ -10,7 +10,7 @@
  *
  */
 
-class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
+class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 {
     const PLUGIN_REVISION = '0.0.1';
 
@@ -19,10 +19,13 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
     const URL_API_SANDBOX = 'http://tripay-payment.test/api-sandbox/transaction/create';
     const URL_API_PRODUCTION = 'http://tripay-payment.test/api/transaction/create';
 
+    protected $tripayPaymentMethod = null;
+    protected $tripayPaymentMethodName = null;
+
     public function __construct(Am_Di $dependency, array $config)
     {
-        $this->defaultTitle = ___('Tripay - Transfer Bank Lokal');
-        $this->defaultDescription = ___('Transfer manual ke Bank Lokal');
+        $this->defaultTitle = ___('Tripay - '.$this->tripayPaymentMethodName);
+        $this->defaultDescription = ___('Bayar Melalui '.$this->tripayPaymentMethodName.' - by Tripay');
 
         parent::__construct($dependency, $config);
     }
@@ -86,46 +89,10 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
         $form->addCheckbox('sandbox_mode')
             ->setLabel(___('Gunakan API Sandbox (Testing)'));
 
-        $form->addSelect('payment_method')
-            ->setLabel(___('Payment Method'))
-            ->loadOptions($this->getPaymentMethods())
-            ->addRule('required');
-
         $form->addSelect('duration')
             ->setLabel(___('Durasi'))
             ->loadOptions($this->getDurations())
             ->addRule('required');
-    }
-
-    /**
-     * Ambil list channel pembayaran yang didukung oleh tripay.
-     *
-     * @return array
-     */
-    public function getPaymentMethods()
-    {
-        return [
-            '' => '--- '.___('Pilih salah satu').' ---',
-            'MYBVA' => 'Maybank Virtual Account',
-            'PERMATAVA' => 'Permata Virtual Account',
-            'BNIVA' => 'BNI Virtual Account',
-            'BRIVA' => 'BRI Virtual Account',
-            'MANDIRIVA' => 'Mandiri Virtual Account',
-            'BCAVA' => 'BCA Virtual Account',
-            'SMSVA' => 'Sinarmas Virtual Account',
-            'MUAMALATVA' => 'Muamalat Virtual Account',
-            'CIMBVA' => 'CIMB Virtual Account',
-            'BRIVAOP' => 'BRI Virtual Account (Open Payment)',
-            'CIMBVAOP' => 'CIMB Niaga Virtual Account (Open Payment)',
-            'BCAVAOP' => 'BCA Virtual Account (Open Payment)',
-            'BNIVAOP' => 'BNI Virtual Account (Open Payment)',
-            'ALFAMART' => 'Alfamart',
-            'ALFAMIDI' => 'Alfamidi ',
-            'QRIS' => 'QRIS',
-            'QRISC' => 'QRIS (Customizable)',
-            'QRISOP' => 'QRIS (Open Payment)',
-            'QRISCOP' => 'QRIS (Open Payment - Customizable)',
-        ];
     }
 
     /**
@@ -172,8 +139,8 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
                 $json = file_get_contents('php://input');
                 $generatedSignature = hash_hmac('sha256', $json, $this->getConfig('private_key'));
 
-                if (! Am_Paysystem_Transaction_Tripay_Ipn::signatureIsMatching($generatedSignature, $callbackSignature)) {
-                    $this->sendJsonResponse(['success' => false, 'message' => 'Signature mismatch.']);
+                if (! Am_Paysystem_Transaction_TripayBase_Ipn::signatureIsMatching($generatedSignature, $callbackSignature)) {
+                    $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Signature mismatch.']);
                 }
 
                 $data = [];
@@ -188,7 +155,7 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
                     $invoiceId = $transaction->findInvoiceId();
 
                     if (is_null($invoiceId)) {
-                        $this->sendJsonResponse(['success' => false, 'message' => 'Invoice not found.']);
+                        $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Invoice not found.']);
                     }
 
                     $transaction->setInvoiceLog($invoiceLog);
@@ -200,7 +167,7 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
                             $invoiceLog->add($e);
                         }
 
-                        $this->sendJsonResponse(['success' => false, 'message' => $e->getMessage()]);
+                        $this->sendJsonResponseThenExit(['success' => false, 'message' => $e->getMessage()]);
                     }
 
                     if ($invoiceLog) {
@@ -225,7 +192,7 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
 
                 $transaction->setInvoiceLog($invoiceLog);
 
-                $this->sendJsonResponse($data);
+                $this->sendJsonResponseThenExit($data);
                 break;
 
             default: return parent::directAction($request, $response, $invokeArgs);
@@ -276,7 +243,7 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
 
     public function createTransaction(Am_Mvc_Request $request, Am_Mvc_Response $response, array $invokeArgs)
     {
-        return new Am_Paysystem_Transaction_Tripay_Ipn($this, $request, $response, $invokeArgs);
+        return new Am_Paysystem_Transaction_TripayBase_Ipn($this, $request, $response, $invokeArgs);
     }
 
     /**
@@ -307,13 +274,15 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
      */
     protected function sendCurlRequest($url, Invoice $invoice)
     {
+        $this->ensureRequiredDataExists();
+
         $url = $this->getTripayApiUrl();
 
         $apiKey = $this->getConfig('api_key');
         $privateKey = $this->getConfig('private_key');
         $merchantCode = $this->getConfig('merchant_code');
         $merchantRef = $invoice->invoice_id;
-        $paymentChannel = $this->getConfig('payment_method');
+        $paymentMethod = $this->tripayPaymentMethod;
         $name = $invoice->getLineDescription();
 
         if ((float) $invoice->first_total <= 0) {
@@ -331,7 +300,7 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
 
 
         $data = [
-            'method' => $paymentChannel,
+            'method' => $paymentMethod,
             'merchant_ref' => $merchantRef,
             'amount' => $price,
             'customer_name' => $invoice->getFirstName().' '. $invoice->getLastName(),
@@ -372,7 +341,7 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
      *
      * @return void
      */
-    protected function sendJsonResponse(array $data)
+    protected function sendJsonResponseThenExit(array $data)
     {
         header('Content-Type: application/json');
 
@@ -380,10 +349,21 @@ class Am_Paysystem_Tripay extends Am_Paysystem_Abstract
 
         exit;
     }
+
+    /**
+     * Pastikan data payment method sudah diisi.
+     *
+     * @return void
+     */
+    private function ensureRequiredDataExists()
+    {
+        if (is_null($this->tripayPaymentMethod) | is_null($this->tripayPaymentMethodName)) {
+            $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Please fill all required configuration data.']);
+        }
+    }
 }
 
-
-class Am_Paysystem_Transaction_Tripay_Ipn extends Am_Paysystem_Transaction_Incoming
+class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_Incoming
 {
     /**
      * Validasi bahwa IPN benar - benar datang dari server tripay, bukan dari hacker.
