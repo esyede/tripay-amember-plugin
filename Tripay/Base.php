@@ -410,8 +410,10 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
         $data = json_decode($data);
 
         $merchantRef = (int) $data->merchant_ref;
+        $pluginId = $this->plugin->getId();
+
         $invoice = Am_Di::getInstance()->db->select(
-            "SELECT * FROM ?_invoice WHERE status = '0' AND invoice_id = '{$merchantRef}' AND paysys_id = 'tripay' LIMIT 1;"
+            "SELECT * FROM ?_invoice WHERE status = '0' AND invoice_id = '{$merchantRef}' AND paysys_id = '{$pluginId}' LIMIT 1;"
         );
 
         if (! is_array($invoice) || empty($invoice) || count($invoice) > 1) {
