@@ -14,9 +14,6 @@ require_once 'Tripay/Base.php';
 
 class Am_Paysystem_TripayQris extends Am_Paysystem_TripayBase
 {
-    protected $tripayPaymentMethod = null;
-    protected $tripayPaymentMethodName = null;
-
     public function __construct(Am_Di $dependency, array $config)
     {
         $this->tripayPaymentMethod = 'QRIS';
