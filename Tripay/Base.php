@@ -14,10 +14,11 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 {
     const PLUGIN_REVISION = '0.0.1';
 
-    const URL_DOCS = 'http://tripay.co.id/developer';
+    const URL_DOCS = 'https://tripay.co.id/developer';
+    const URL_BASE = 'https://tripay.co.id';
 
-    const URL_API_SANDBOX = 'http://tripay.co.id/api-sandbox/transaction/create';
-    const URL_API_PRODUCTION = 'http://tripay.co.id/api/transaction/create';
+    const URL_API_SANDBOX = 'https://tripay.co.id/api-sandbox/transaction/create';
+    const URL_API_PRODUCTION = 'https://tripay.co.id/api/transaction/create';
 
     protected $tripayPaymentMethod = null;
     protected $tripayPaymentMethodName = null;
@@ -73,26 +74,53 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                 '<p>Channel pembayaran pada plugin ini hanya mendukung <b>Closed Payment</b>.</p>'
             );
 
+        $form->addCheckbox('sandbox_mode')
+            ->setLabel(___('Gunakan API Sandbox (Testing)'));
+
+        $form->addHtml()
+            ->setHtml(
+                '<b>Sandbox</b> digunakan untuk masa pengembangan'
+            );
 
         $form->addText('merchant_code', ['size' => 100, 'placeholder' => ___('Kode merchant anda..')])
             ->setLabel(___('Kode Merchant'))
             ->addRule('required');
 
+        $form->addHtml()
+            ->setHtml(
+                'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
+                Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
+            );
+
         $form->addText('api_key', ['size' => 100, 'placeholder' => ___('API key anda..')])
             ->setLabel(___('API Key'))
             ->addRule('required');
+
+        $form->addHtml()
+            ->setHtml(
+                'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
+                Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
+            );
 
         $form->addText('private_key', ['size' => 100, 'placeholder' => ___('Private key anda..')])
             ->setLabel(___('Private Key'))
             ->addRule('required');
 
-        $form->addCheckbox('sandbox_mode')
-            ->setLabel(___('Gunakan API Sandbox (Testing)'));
+        $form->addHtml()
+            ->setHtml(
+                'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
+                Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
+            );
 
         $form->addSelect('duration')
             ->setLabel(___('Durasi'))
             ->loadOptions($this->getDurations())
             ->addRule('required');
+
+        $form->addHtml()
+            ->setHtml(
+                'Masa aktif/berlaku kode bayar'
+            );
     }
 
     /**
