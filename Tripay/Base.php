@@ -16,8 +16,8 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 
     const URL_DOCS = 'http://tripay.co.id/developer';
 
-    const URL_API_SANDBOX = 'http://tripay-payment.test/api-sandbox/transaction/create';
-    const URL_API_PRODUCTION = 'http://tripay-payment.test/api/transaction/create';
+    const URL_API_SANDBOX = 'http://tripay.co.id/api-sandbox/transaction/create';
+    const URL_API_PRODUCTION = 'http://tripay.co.id/api/transaction/create';
 
     protected $tripayPaymentMethod = null;
     protected $tripayPaymentMethodName = null;
@@ -214,18 +214,9 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
         $response = $this->sendCurlRequest($url, $invoice);
         $response = json_decode($response);
 
-        $a = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
+        $action = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
 
-        $a->t = $invoice->getLineDescription();
-        $a->vp = $invoice->first_total;
-        $a->sp = $invoice->second_total;
-        $a->s = $this->getConfig('merchant_id');
-        $a->fn = $invoice->getFirstName();
-        $a->sn = $invoice->getLastName();
-        $a->em = $invoice->getEmail();
-        $a->ret = $this->getReturnUrl();
-
-        $result->setAction($a);
+        $result->setAction($action);
     }
 
     /**
