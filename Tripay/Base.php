@@ -376,7 +376,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
      */
     private function ensureRequiredDataExists()
     {
-        if (is_null($this->tripayPaymentMethod) | is_null($this->tripayPaymentMethodName)) {
+        if (is_null($this->tripayPaymentMethod) || is_null($this->tripayPaymentMethodName)) {
             $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Please fill all required configuration data.']);
         }
     }
