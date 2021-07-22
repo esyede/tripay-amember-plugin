@@ -242,7 +242,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
         $response = $this->sendCurlRequest($url, $invoice);
         $response = json_decode($response);
 
-        $action = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
+        $action = new Am_Paysystem_Action_Redirect($this->getReturnUrl());
 
         $result->setAction($action);
     }
