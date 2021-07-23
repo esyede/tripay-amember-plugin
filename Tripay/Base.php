@@ -255,8 +255,16 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
         $url = $this->getTripayApiUrl();
 
         $response = $this->sendCurlRequest($url, $invoice);
-        $action = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
 
+        if (! $response instanceof \stdClass) {
+            throw new Exception('A non-object response received.');
+        }
+
+        if ($response->success !== true) {
+            throw new Exception($response->message);
+        }
+
+        $action = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
         $result->setAction($action);
     }
 
