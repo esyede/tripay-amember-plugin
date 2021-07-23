@@ -12,7 +12,7 @@
 
 class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 {
-    const PLUGIN_REVISION = '0.0.1';
+    const PLUGIN_REVISION = '1.0.0';
 
     const URL_DOCS = 'https://tripay.co.id/developer';
     const URL_BASE = 'https://tripay.co.id';
@@ -23,6 +23,12 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
     protected $tripayPaymentMethod = null;
     protected $tripayPaymentMethodName = null;
 
+    /**
+     * Konstruktor
+     *
+     * @param Am_Di $dependency
+     * @param array $config
+     */
     public function __construct(Am_Di $dependency, array $config)
     {
         $this->defaultTitle = ___('Tripay - '.$this->tripayPaymentMethodName);
@@ -64,7 +70,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
     public function _initSetupForm(Am_Form_Setup $form)
     {
         $form->addText('version', ['size' => 100, 'value' => self::PLUGIN_REVISION, 'readonly' => 'true'])
-            ->setLabel(___('Versi Plugin'));
+            ->setLabel('Versi Plugin');
 
         $form->addHtml()
             ->setHtml(
@@ -75,15 +81,13 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
             );
 
         $form->addCheckbox('sandbox_mode')
-            ->setLabel(___('Gunakan API Sandbox (Testing)'));
+            ->setLabel('Gunakan API Sandbox');
 
         $form->addHtml()
-            ->setHtml(
-                '<b>Sandbox</b> digunakan untuk masa pengembangan'
-            );
+            ->setHtml('<b>Sandbox</b> digunakan untuk masa pengembangan');
 
         $form->addText('merchant_code', ['size' => 100, 'placeholder' => ___('Kode merchant anda..')])
-            ->setLabel(___('Kode Merchant'))
+            ->setLabel('Kode Merchant')
             ->addRule('required');
 
         $form->addHtml()
@@ -93,7 +97,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
             );
 
         $form->addText('api_key', ['size' => 100, 'placeholder' => ___('API key anda..')])
-            ->setLabel(___('API Key'))
+            ->setLabel('API Key')
             ->addRule('required');
 
         $form->addHtml()
@@ -103,7 +107,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
             );
 
         $form->addText('private_key', ['size' => 100, 'placeholder' => ___('Private key anda..')])
-            ->setLabel(___('Private Key'))
+            ->setLabel('Private Key')
             ->addRule('required');
 
         $form->addHtml()
@@ -113,19 +117,16 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
             );
 
         $form->addSelect('duration')
-            ->setLabel(___('Durasi'))
-            ->loadOptions($this->getDurations())
+            ->setLabel('Durasi')
+            ->loadOptions(TripayHelper::getDurations())
             ->addRule('required');
 
         $form->addHtml()
-            ->setHtml(
-                'Masa aktif/berlaku kode bayar'
-            );
+            ->setHtml('Masa aktif/berlaku kode bayar');
     }
 
     /**
      * Tampilkan panduan pada footer halaman setup amember.
-     * Lihat: http://amember.local/admin-setup/tripay.
      *
      * @return string
      */
@@ -162,13 +163,16 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 
         switch ($actionName) {
             case 'ipn':
-                $callbackSignature = isset($_SERVER['HTTP_X_CALLBACK_SIGNATURE']) ? $_SERVER['HTTP_X_CALLBACK_SIGNATURE'] : '';
+                $tripaySignatue = isset($_SERVER['HTTP_X_CALLBACK_SIGNATURE']) ? $_SERVER['HTTP_X_CALLBACK_SIGNATURE'] : '';
 
-                $json = file_get_contents('php://input');
-                $generatedSignature = hash_hmac('sha256', $json, $this->getConfig('private_key'));
+                $json = TripayHelper::getResponse(true);
+                $localSignature = hash_hmac('sha256', $json, $this->getConfig('private_key'));
 
-                if (! Am_Paysystem_Transaction_TripayBase_Ipn::signatureIsMatching($generatedSignature, $callbackSignature)) {
-                    $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Signature mismatch.']);
+                if (! TripayHelper::signatureIsMatching($localSignature, $tripaySignatue)) {
+                    TripayHelper::sendJsonResponse([
+                        'success' => false,
+                        'message' => 'Signature mismatch.'
+                    ]);
                 }
 
                 $data = [];
@@ -183,7 +187,10 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                     $invoiceId = $transaction->findInvoiceId();
 
                     if (is_null($invoiceId)) {
-                        $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Invoice not found.']);
+                        TripayHelper::sendJsonResponse([
+                            'success' => false,
+                            'message' => 'Invoice not found.'
+                        ]);
                     }
 
                     $transaction->setInvoiceLog($invoiceLog);
@@ -195,7 +202,10 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                             $invoiceLog->add($e);
                         }
 
-                        $this->sendJsonResponseThenExit(['success' => false, 'message' => $e->getMessage()]);
+                        TripayHelper::sendJsonResponse([
+                            'success' => false,
+                            'message' => $e->getMessage()
+                        ]);
                     }
 
                     if ($invoiceLog) {
@@ -203,9 +213,10 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                     }
 
 
-                    $json = json_decode(file_get_contents('php://input'));
-                    $amount = $json->total_amount;
-                    $reference = $json->reference;
+                    $data = TripayHelper::getResponse();
+
+                    $amount = $data->total_amount;
+                    $reference = $data->reference;
 
                     $data = [
                         'success' => true,
@@ -215,15 +226,18 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                         'reference' => $reference,
                     ];
                 } catch (Exception $e) {
-                    $data = ['success' => false, 'message' => $e->getMessage()];
+                    $data = [
+                        'success' => false,
+                        'message' => $e->getMessage()
+                    ];
                 }
 
                 $transaction->setInvoiceLog($invoiceLog);
-
-                $this->sendJsonResponseThenExit($data);
+                TripayHelper::sendJsonResponse($data);
                 break;
 
-            default: return parent::directAction($request, $response, $invokeArgs);
+            default:
+                return parent::directAction($request, $response, $invokeArgs);
         }
     }
 
@@ -239,10 +253,9 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
     public function _process(Invoice $invoice, Am_Mvc_Request $request, Am_Paysystem_Result $result)
     {
         $url = $this->getTripayApiUrl();
-        $response = $this->sendCurlRequest($url, $invoice);
-        $response = json_decode($response);
 
-        $action = new Am_Paysystem_Action_Redirect($this->getReturnUrl());
+        $response = $this->sendCurlRequest($url, $invoice);
+        $action = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
 
         $result->setAction($action);
     }
@@ -266,24 +279,6 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
     }
 
     /**
-     * Ambil list waktu kadaluwarsa invoice.
-     *
-     * @return array
-     */
-    protected function getDurations()
-    {
-        return [
-            '1' => '1 '.___('Hari'),
-            '2' => '2 '.___('Hari'),
-            '3' => '3 '.___('Hari'),
-            '4' => '4 '.___('Hari'),
-            '5' => '5 '.___('Hari'),
-            '6' => '6 '.___('Hari'),
-            '7' => '7 '.___('Hari'),
-        ];
-    }
-
-    /**
      * Kirim POST request ke server tripay.
      *
      * @param string  $url
@@ -296,7 +291,6 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
         $this->ensureRequiredDataExists();
 
         $url = $this->getTripayApiUrl();
-
         $apiKey = $this->getConfig('api_key');
         $privateKey = $this->getConfig('private_key');
         $merchantCode = $this->getConfig('merchant_code');
@@ -315,6 +309,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 
         $period = (int) $this->getConfig('duration');
         $callbackUrl = $this->getPluginUrl('notifications');
+        $returnUrl = $this->getReturnUrl();
         $returnUrl = $this->getReturnUrl();
 
 
@@ -350,23 +345,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 
         curl_close($curl);
 
-        return empty($error) ? $response : $error;
-    }
-
-    /**
-     * Kirim response JSON ke browser dan hentikan eksekusi.
-     *
-     * @param array $data
-     *
-     * @return void
-     */
-    protected function sendJsonResponseThenExit(array $data)
-    {
-        header('Content-Type: application/json');
-
-        echo json_encode($data);
-
-        exit;
+        return empty($error) ? json_decode($response) : $error;
     }
 
     /**
@@ -377,10 +356,14 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
     private function ensureRequiredDataExists()
     {
         if (is_null($this->tripayPaymentMethod) || is_null($this->tripayPaymentMethodName)) {
-            $this->sendJsonResponseThenExit(['success' => false, 'message' => 'Please fill all required configuration data.']);
+            TripayHelper::sendJsonResponse([
+                'success' => false,
+                'message' => 'Please fill all required configuration data.'
+            ]);
         }
     }
 }
+
 
 class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_Incoming
 {
@@ -391,12 +374,12 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
      */
     public function validateSource()
     {
-        $callbackSignature = isset($_SERVER['HTTP_X_CALLBACK_SIGNATURE']) ? $_SERVER['HTTP_X_CALLBACK_SIGNATURE'] : '';
+        $tripaySignatue = isset($_SERVER['HTTP_X_CALLBACK_SIGNATURE']) ? $_SERVER['HTTP_X_CALLBACK_SIGNATURE'] : '';
 
-        $json = file_get_contents('php://input');
-        $generatedSignature = hash_hmac('sha256', $json, $this->plugin->getConfig('private_key'));
+        $json = TripayHelper::getResponse(true);
+        $localSignature = hash_hmac('sha256', $json, $this->plugin->getConfig('private_key'));
 
-        return static::signatureIsMatching($generatedSignature, $callbackSignature);
+        return TripayHelper::signatureIsMatching($localSignature, $tripaySignatue);
     }
 
     /**
@@ -412,7 +395,7 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
             return false;
         }
 
-        $data = json_decode(file_get_contents('php://input'));
+        $data = TripayHelper::getResponse();
         $status = ($data->status === 'PAID');
 
         return $status;
@@ -425,8 +408,7 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
      */
     public function findInvoiceId()
     {
-        $data = file_get_contents('php://input');
-        $data = json_decode($data);
+        $data = TripayHelper::getResponse();
 
         $merchantRef = (int) $data->merchant_ref;
         $pluginId = $this->plugin->getId();
@@ -449,7 +431,7 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
      */
     public function getUniqId()
     {
-        $data = json_decode(file_get_contents('php://input'));
+        $data = TripayHelper::getResponse();
 
         return $data->reference;
     }
@@ -462,35 +444,80 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
      */
     public function validateTerms()
     {
-        $data = file_get_contents('php://input');
-        $data = json_decode($data);
-
-        // Total amount dari invoice tripay dikurangi fee customer
+        $data = TripayHelper::getResponse();
         $amount = $data->total_amount - $data->fee_customer;
 
-        return ($amount == $this->invoice->first_total);
+        return ((int) $amount === (int) $this->invoice->first_total);
+    }
+}
+
+
+class TripayHelper
+{
+    /**
+     * Kirim response JSON ke browser.
+     *
+     * @param array  $data
+     * @param bool   $immediateExit
+     *
+     * @return string
+     */
+    public static function sendJsonResponse(array $data, $immediateExit = true)
+    {
+        header('Content-Type: application/json');
+
+        echo json_encode($data);
+
+        if ($immediateExit) {
+            exit;
+        }
+    }
+
+    /**
+     * Ambil response dari server tripay.
+     *
+     * @param bool $asRawString
+     *
+     * @return \stdClass|string
+     */
+    public static function getResponse($asRawString = false)
+    {
+        $data = file_get_contents('php://input');
+
+        if (! $asRawString) {
+            $data = json_decode($data);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                static::sendJsonResponse([
+                    'success' => false,
+                    'message' => 'Invalid JSON response recieved.'
+                ]);
+            }
+        }
+
+        return $data;
     }
 
     /**
      * Polyfill untuk fungsi hash_equals agar plugin tetap bacward-compatible sampai PHP 5.4.0.
      * Lihat: https://github.com/symfony/polyfill-php56/blob/ea19621731cbd973a6702cfedef3419768bf3372/Php56.php#L24-L52
      *
-     * @param string $callbackSignature
-     * @param string $generatedSignature
+     * @param string $tripaySignatue
+     * @param string $localSignature
      *
      * @return bool
      */
-    public static function signatureIsMatching($callbackSignature, $generatedSignature)
+    public static function signatureIsMatching($tripaySignatue, $localSignature)
     {
         // Polyfill untuk fungsi hash_equals yang baru tersedia di PHP 5.6.0+
         // Kita butuh ini agar plugin tetap kompatibel dengan PHP 5.4.0
         if (! function_exists('hash_equals')) {
-            if (! is_string($generatedSignature) || ! is_string($callbackSignature)) {
+            if (! is_string($localSignature) || ! is_string($tripaySignatue)) {
                 return false;
             }
 
-            $length1 = mb_strlen($callbackSignature, '8bit');
-            $length2 = mb_strlen($generatedSignature, '8bit');
+            $length1 = mb_strlen($tripaySignatue, '8bit');
+            $length2 = mb_strlen($localSignature, '8bit');
 
             if ($length1 !== $length2) {
                 return false;
@@ -499,12 +526,30 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
             $result = 0;
 
             for ($i = 0; $i < $length1; ++$i) {
-                $result |= ord($callbackSignature[$i]) ^ ord($generatedSignature[$i]);
+                $result |= ord($tripaySignatue[$i]) ^ ord($localSignature[$i]);
             }
 
             return (0 === $result);
         }
 
-        return hash_equals($callbackSignature, $generatedSignature);
+        return hash_equals($tripaySignatue, $localSignature);
+    }
+
+    /**
+     * Ambil list waktu kadaluwarsa invoice.
+     *
+     * @return array
+     */
+    public static function getDurations()
+    {
+        return [
+            '1' => '1 Hari',
+            '2' => '2 Hari',
+            '3' => '3 Hari',
+            '4' => '4 Hari',
+            '5' => '5 Hari',
+            '6' => '6 Hari',
+            '7' => '7 Hari',
+        ];
     }
 }
