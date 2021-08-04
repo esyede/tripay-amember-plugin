@@ -96,6 +96,12 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                 Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
             );
 
+        $form->addText('callback_url', ['size' => 100, 'value' => $this->getPluginUrl('ipn'), 'readonly' => 'true', 'style' =>'background-color:#eeeeee;color:black;'])
+            ->setLabel('URL Callback');
+
+        $form->addHtml()
+            ->setHtml('Salin URL diatas ke isian URL Callback di dashboard tripay anda.');
+
         $form->addText('api_key', ['size' => 100, 'placeholder' => ___('API key anda..')])
             ->setLabel('API Key')
             ->addRule('required');
@@ -255,16 +261,8 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
         $url = $this->getTripayApiUrl();
 
         $response = $this->sendCurlRequest($url, $invoice);
-
-        if (! $response instanceof \stdClass) {
-            throw new Exception('A non-object response received.');
-        }
-
-        if ($response->success !== true) {
-            throw new Exception($response->message);
-        }
-
         $action = new Am_Paysystem_Action_Redirect($response->data->checkout_url);
+
         $result->setAction($action);
     }
 
@@ -371,7 +369,6 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
         }
     }
 }
-
 
 class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_Incoming
 {
@@ -542,6 +539,8 @@ class TripayHelper
 
         return hash_equals($tripaySignatue, $localSignature);
     }
+
+
 
     /**
      * Ambil list waktu kadaluwarsa invoice.
