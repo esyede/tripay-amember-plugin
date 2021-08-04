@@ -12,7 +12,7 @@
 
 class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 {
-    const PLUGIN_REVISION = '1.0.0';
+    const PLUGIN_REVISION = '1.0.1';
 
     const URL_DOCS = 'https://tripay.co.id/developer';
     const URL_BASE = 'https://tripay.co.id';
