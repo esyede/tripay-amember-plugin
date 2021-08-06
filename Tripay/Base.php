@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Plugin integrasi Tripay Payment Gateway dengan aMember.
+ * Plugin integrasi TriPay Payment Gateway dengan aMember.
  * Tested on aMember Pro v6.2.10
  *
  * Copyright (c) 2021 PT Trijaya Digital Group.
@@ -12,7 +12,7 @@
 
 class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 {
-    const PLUGIN_REVISION = '1.0.1';
+    const PLUGIN_REVISION = '1.0.2';
 
     const URL_DOCS = 'https://tripay.co.id/developer';
     const URL_BASE = 'https://tripay.co.id';
@@ -31,8 +31,8 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
      */
     public function __construct(Am_Di $dependency, array $config)
     {
-        $this->defaultTitle = ___('Tripay - '.$this->tripayPaymentMethodName);
-        $this->defaultDescription = ___('Bayar Melalui '.$this->tripayPaymentMethodName.' - by Tripay');
+        $this->defaultTitle = ___('TriPay - '.$this->tripayPaymentMethodName);
+        $this->defaultDescription = ___('Bayar Melalui '.$this->tripayPaymentMethodName.' - by TriPay');
 
         parent::__construct($dependency, $config);
     }
@@ -69,12 +69,15 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
      */
     public function _initSetupForm(Am_Form_Setup $form)
     {
+        $help = 'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
+            Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>';
+
         $form->addText('version', ['size' => 100, 'value' => self::PLUGIN_REVISION, 'readonly' => 'true'])
             ->setLabel('Versi Plugin');
 
         $form->addHtml()
             ->setHtml(
-                '<p>Dibawah ini anda dapat menyetel kredensial untuk koneksi ke server Tripay.<br>'.
+                '<p>Dibawah ini anda dapat menyetel kredensial untuk koneksi ke server TriPay.<br>'.
                 'Panduan integrasi dapat anda baca melalui '.
                 '<a href="'.self::URL_DOCS.'" target="_blank" class="link"><b>Halaman Developer</b></a></p>'.
                 '<p>Channel pembayaran pada plugin ini hanya mendukung <b>Closed Payment</b>.</p>'
@@ -82,53 +85,40 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
 
         $form->addCheckbox('sandbox_mode')
             ->setLabel('Gunakan API Sandbox');
-
-        $form->addHtml()
-            ->setHtml('<b>Sandbox</b> digunakan untuk masa pengembangan');
+        $form->addHtml()->setHtml('<b>Sandbox</b> digunakan untuk masa pengembangan');
 
         $form->addText('merchant_code', ['size' => 100, 'placeholder' => ___('Kode merchant anda..')])
             ->setLabel('Kode Merchant')
             ->addRule('required');
+        $form->addHtml()->setHtml($help);
 
-        $form->addHtml()
-            ->setHtml(
-                'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
-                Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
-            );
-
-        $form->addText('callback_url', ['size' => 100, 'value' => $this->getPluginUrl('ipn'), 'readonly' => 'true', 'style' =>'background-color:#eeeeee;color:black;'])
-            ->setLabel('URL Callback');
-
-        $form->addHtml()
-            ->setHtml('Salin URL diatas ke isian URL Callback di dashboard tripay anda.');
+        $form->addText('callback_url', [
+            'size' => 100,
+            'value' => 'Kosongkan',
+            'readonly' => 'true',
+            'style' =>'background-color:#eeeeee;color:black;'
+        ])->setLabel('URL Callback');
+        $form->addHtml()->setHtml(
+            'Kosongkan URL Callback di dashboard TriPay anda.<br>'.
+            'Untuk panduan ketika testing. Silahkan merujuk ke halaman '.'
+            <a href="'.self::URL_BASE.'/docs/3/cara-install-setting-plugin-untuk-amember" target="_blank">Dokumentasi</a>'
+        );
 
         $form->addText('api_key', ['size' => 100, 'placeholder' => ___('API key anda..')])
             ->setLabel('API Key')
             ->addRule('required');
-
-        $form->addHtml()
-            ->setHtml(
-                'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
-                Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
-            );
+        $form->addHtml()->setHtml($help);
 
         $form->addText('private_key', ['size' => 100, 'placeholder' => ___('Private key anda..')])
             ->setLabel('Private Key')
             ->addRule('required');
-
-        $form->addHtml()
-            ->setHtml(
-                'Untuk mode <b>Sandbox</b> lihat <a href="'.self::URL_BASE.'/simulator/merchant" target="_blank">di sini</a><br>
-                Untuk mode <b>Production</b> lihat <a href="'.self::URL_BASE.'/member/merchant" target="_blank">di sini</a>'
-            );
+        $form->addHtml()->setHtml($help);
 
         $form->addSelect('duration')
             ->setLabel('Durasi')
             ->loadOptions(TripayHelper::getDurations())
             ->addRule('required');
-
-        $form->addHtml()
-            ->setHtml('Masa aktif/berlaku kode bayar');
+        $form->addHtml() ->setHtml('Masa aktif/berlaku kode bayar');
     }
 
     /**
@@ -175,10 +165,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                 $localSignature = hash_hmac('sha256', $json, $this->getConfig('private_key'));
 
                 if (! TripayHelper::signatureIsMatching($localSignature, $tripaySignatue)) {
-                    TripayHelper::sendJsonResponse([
-                        'success' => false,
-                        'message' => 'Signature mismatch.'
-                    ]);
+                    throw new Am_Exception_InputError('[TriPay] ERROR: Signature mismatch. - DATA: '.$json);
                 }
 
                 $data = [];
@@ -193,10 +180,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                     $invoiceId = $transaction->findInvoiceId();
 
                     if (is_null($invoiceId)) {
-                        TripayHelper::sendJsonResponse([
-                            'success' => false,
-                            'message' => 'Invoice not found.'
-                        ]);
+                        throw new Am_Exception_InputError('[TriPay] ERROR: Invoice not found. - DATA: Invoice ID #'.$invoiceId);
                     }
 
                     $transaction->setInvoiceLog($invoiceLog);
@@ -208,10 +192,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                             $invoiceLog->add($e);
                         }
 
-                        TripayHelper::sendJsonResponse([
-                            'success' => false,
-                            'message' => $e->getMessage()
-                        ]);
+                        throw new Am_Exception_InputError('[TriPay] ERROR: '.$e->getMessage().' - DATA: '.json_encode($e));
                     }
 
                     if ($invoiceLog) {
@@ -232,14 +213,12 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
                         'reference' => $reference,
                     ];
                 } catch (Exception $e) {
-                    $data = [
-                        'success' => false,
-                        'message' => $e->getMessage()
-                    ];
+                    $data['success'] = false;
+                    $data['status'] = 'error';
+                    throw new Am_Exception_InputError('[TriPay] ERROR: '.$e->getMessage().' - DATA: '.json_encode($data));
                 }
 
                 $transaction->setInvoiceLog($invoiceLog);
-                TripayHelper::sendJsonResponse($data);
                 break;
 
             default:
@@ -362,10 +341,7 @@ class Am_Paysystem_TripayBase extends Am_Paysystem_Abstract
     private function ensureRequiredDataExists()
     {
         if (is_null($this->tripayPaymentMethod) || is_null($this->tripayPaymentMethodName)) {
-            TripayHelper::sendJsonResponse([
-                'success' => false,
-                'message' => 'Please fill all required configuration data.'
-            ]);
+            throw new Am_Exception_InputError('[TriPay] ERROR: Please fill all required configuration data.');
         }
     }
 }
@@ -460,25 +436,6 @@ class Am_Paysystem_Transaction_TripayBase_Ipn extends Am_Paysystem_Transaction_I
 class TripayHelper
 {
     /**
-     * Kirim response JSON ke browser.
-     *
-     * @param array  $data
-     * @param bool   $immediateExit
-     *
-     * @return string
-     */
-    public static function sendJsonResponse(array $data, $immediateExit = true)
-    {
-        header('Content-Type: application/json');
-
-        echo json_encode($data);
-
-        if ($immediateExit) {
-            exit;
-        }
-    }
-
-    /**
      * Ambil response dari server tripay.
      *
      * @param bool $asRawString
@@ -493,10 +450,7 @@ class TripayHelper
             $data = json_decode($data);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                static::sendJsonResponse([
-                    'success' => false,
-                    'message' => 'Invalid JSON response recieved.'
-                ]);
+                throw new Am_Exception_InputError('[TriPay] ERROR: Invalid JSON response recieved. - DATA: '.$data);
             }
         }
 
